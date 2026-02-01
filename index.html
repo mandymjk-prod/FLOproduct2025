@@ -150,6 +150,16 @@
         }
 
         @media (max-width: 767px) {
+            /* 모바일에서 배너 높이를 이미지 비율에 맞춤 (2000:1116 = 약 55.8vw) */
+            .banner {
+                height: 55.8vw;
+                min-height: 55.8vw;
+            }
+
+            .content {
+                margin-top: 55.8vw;
+            }
+
             h1 {
                 font-size: 36px;
             }
