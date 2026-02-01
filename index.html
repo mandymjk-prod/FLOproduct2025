@@ -41,6 +41,13 @@
             aspect-ratio: 2000 / 1116;
         }
 
+        /* 모바일에서 배너 이미지 전체 표시 */
+        @media (max-width: 767px) {
+            .banner img {
+                object-fit: contain;
+            }
+        }
+
         /* 본문 영역 */
         .content {
             position: relative;
