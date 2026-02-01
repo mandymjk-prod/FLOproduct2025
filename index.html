@@ -320,10 +320,11 @@
             }, 1100); // 300 + 800 (애니메이션 시간)
         });
 
-        // 스크롤 애니메이션
+        // 스크롤 애니메이션 - 모바일과 데스크톱 구분
+        const isMobile = window.innerWidth <= 767;
         const observerOptions = {
             threshold: 0.15,
-            rootMargin: '0px 0px -100px 0px'
+            rootMargin: isMobile ? '0px 0px -70px 0px' : '0px 0px -100px 0px' // 모바일: 70px, 데스크톱: 100px
         };
 
         const observer = new IntersectionObserver((entries) => {
