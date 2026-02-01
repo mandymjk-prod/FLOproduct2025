@@ -328,8 +328,8 @@
         // 스크롤 애니메이션 - 모바일과 데스크톱 구분
         const isMobile = window.innerWidth <= 767;
         const observerOptions = {
-            threshold: 0.15,
-            rootMargin: isMobile ? '0px 0px -50px 0px' : '0px 0px -100px 0px' // 모바일: 70px, 데스크톱: 100px
+            threshold: 0.1,
+            rootMargin: isMobile ? '0px 0px -30px 0px' : '0px 0px -100px 0px' // 모바일: 30px, 데스크톱: 100px
         };
 
         const observer = new IntersectionObserver((entries) => {
