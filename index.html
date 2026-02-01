@@ -328,7 +328,7 @@
         const isMobile = window.innerWidth <= 767;
         const observerOptions = {
             threshold: 0.15,
-            rootMargin: isMobile ? '0px 0px -70px 0px' : '0px 0px -100px 0px' // 모바일: 70px, 데스크톱: 100px
+            rootMargin: isMobile ? '0px 0px -50px 0px' : '0px 0px -100px 0px' // 모바일: 70px, 데스크톱: 100px
         };
 
         const observer = new IntersectionObserver((entries) => {
