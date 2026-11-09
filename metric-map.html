@@ -1,0 +1,435 @@
+<title>FLO 지표 맵</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: header + view tabs, then a self-scrolling canvas beside a sticky detail panel (stacks on phones) */
+:root{
+  --bg:#f5f5fa; --surface:#ffffff; --ink:#17172b; --muted:#5c5c78; --line:#d8d8e8; --line-strong:#b4b4cc;
+  --accent:#3636e8; --accent-soft:#e7e7ff; --accent-ink:#ffffff;
+  --metric:#0d7466; --metric-soft:#dbf2ee;
+  --lever:#a95f00; --lever-soft:#fff0d9;
+  --hidden:#7d7d97; --neg:#c23636; --neg-soft:#fde6e6;
+  --font-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e0e18; --surface:#171726; --ink:#ececf7; --muted:#a2a2bd; --line:#2b2b44; --line-strong:#43435f;
+  --accent:#8e8eff; --accent-soft:#24245a; --accent-ink:#0e0e18;
+  --metric:#4fcfbb; --metric-soft:#0f322d;
+  --lever:#f2a945; --lever-soft:#38270f;
+  --hidden:#8a8aa6; --neg:#ff7d7d; --neg-soft:#3a1717; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e0e18; --surface:#171726; --ink:#ececf7; --muted:#a2a2bd; --line:#2b2b44; --line-strong:#43435f;
+  --accent:#8e8eff; --accent-soft:#24245a; --accent-ink:#0e0e18;
+  --metric:#4fcfbb; --metric-soft:#0f322d;
+  --lever:#f2a945; --lever-soft:#38270f;
+  --hidden:#8a8aa6; --neg:#ff7d7d; --neg-soft:#3a1717; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6;
+  padding-block:28px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.shell{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px}
+.eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+h1{margin:2px 0 6px;font-size:30px;line-height:1.2;font-weight:700;text-wrap:balance;letter-spacing:-.01em}
+.lede{margin:0;max-width:62ch;color:var(--muted)}
+.tabs{display:flex;gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.tabs button{font:inherit;font-weight:600;font-size:14px;border:0;background:transparent;color:var(--muted);padding:8px 14px;border-radius:7px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.tabs button:focus-visible,.chip:focus-visible,.linkbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;min-height:36px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{width:14px;height:10px;border-radius:3px;display:inline-block;border:1.5px solid}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:inherit;font-size:13px;font-weight:600;padding:5px 10px;border-radius:999px;border:1.5px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer}
+.chip b{font-family:var(--font-mono);font-weight:500;margin-right:4px}
+.chip.R b{color:var(--accent)} .chip.B b{color:var(--neg)}
+.chip[aria-pressed="true"].R{border-color:var(--accent);background:var(--accent-soft)}
+.chip[aria-pressed="true"].B{border-color:var(--neg);background:var(--neg-soft)}
+
+.wrap{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+.canvas{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:78vh;min-width:0}
+.canvas svg{display:block}
+#map svg{width:100%;min-width:820px;height:auto}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;position:sticky;top:max(16px,env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel h2{margin:0;font-size:20px;line-height:1.3;text-wrap:balance}
+.panel .kind{font-family:var(--font-mono);font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.panel p{margin:0}
+.panel dl{margin:0;display:grid;gap:10px}
+.panel dt{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.panel dd{margin:2px 0 0;overflow-wrap:anywhere}
+.panel code{font-family:var(--font-mono);font-size:13px;background:var(--bg);padding:1px 5px;border-radius:4px}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:18px;font-weight:500}
+.evidence{border-left:3px solid var(--lever);padding:4px 0 4px 10px;background:var(--lever-soft);border-radius:0 6px 6px 0}
+.caution{font-size:13px;color:var(--muted)}
+.linkbtn{align-self:flex-start;font:inherit;font-size:14px;font-weight:600;color:var(--accent);background:transparent;border:1.5px solid var(--accent);border-radius:8px;padding:6px 12px;cursor:pointer}
+.conn{display:flex;flex-wrap:wrap;gap:6px}
+.conn button{font:inherit;font-size:13px;border:1px solid var(--line-strong);background:var(--bg);color:var(--ink);border-radius:6px;padding:3px 8px;cursor:pointer}
+.conn .pol{font-family:var(--font-mono);font-weight:500}
+.conn .pol.neg{color:var(--neg)}
+footer{font-size:13px;color:var(--muted);max-width:90ch;display:flex;flex-direction:column;gap:6px}
+footer p{margin:0}
+
+/* SVG */
+svg text{font-family:var(--font-body);fill:var(--ink)}
+.t-node{cursor:pointer}
+.t-node rect.card{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.2}
+.t-node.ns rect.card{fill:var(--accent);stroke:var(--accent)}
+.t-node.ns text{fill:var(--accent-ink)}
+.t-node.dw rect.card{stroke-dasharray:4 3}
+.t-node.sel rect.card{stroke:var(--accent);stroke-width:2.5}
+.t-node:hover rect.card{stroke:var(--accent)}
+.t-node:focus-visible{outline:none}
+.t-node:focus-visible rect.card{stroke:var(--accent);stroke-width:3}
+.t-label{font-size:14px;font-weight:600}
+.t-sub{font-family:var(--font-mono);font-size:11px;fill:var(--muted)}
+.t-node.ns .t-sub{fill:var(--accent-ink);opacity:.8}
+.t-vol{font-family:var(--font-mono);font-size:11px;fill:var(--metric);font-weight:500}
+.t-ev{fill:var(--lever)}
+.t-edge{fill:none;stroke:var(--line-strong);stroke-width:1.5}
+.t-edge.inf{stroke-dasharray:5 4}
+.op{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.2}
+.op-t{font-family:var(--font-mono);font-size:11px;font-weight:500;fill:var(--muted)}
+.tog{cursor:pointer}
+.tog circle{fill:var(--bg);stroke:var(--line-strong)}
+.tog text{font-family:var(--font-mono);font-size:13px;fill:var(--muted)}
+
+.m-node{cursor:pointer}
+.m-node rect{stroke-width:1.6}
+.m-node.metric rect{fill:var(--metric-soft);stroke:var(--metric)}
+.m-node.outcome rect{fill:var(--accent);stroke:var(--accent)}
+.m-node.outcome text{fill:var(--accent-ink);font-weight:700}
+.m-node.lever rect{fill:var(--lever-soft);stroke:var(--lever)}
+.m-node.hidden rect{fill:var(--surface);stroke:var(--hidden);stroke-dasharray:4 3}
+.m-node.hidden text{fill:var(--muted)}
+.m-node text{font-size:14px;font-weight:600}
+.m-node.hub text{font-size:17px}
+.m-node:focus-visible{outline:none}
+.m-node:focus-visible rect,.m-node.sel rect{stroke-width:3}
+.m-edge{fill:none;stroke:var(--line-strong);stroke-width:1.6}
+.m-edge.neg{stroke:var(--neg)}
+.m-edge.lev{stroke-dasharray:5 4}
+.pol-c{fill:var(--surface);stroke:var(--line-strong);stroke-width:1.2}
+.pol-t{font-family:var(--font-mono);font-size:13px;font-weight:500;fill:var(--muted)}
+.pol-g.neg .pol-c{stroke:var(--neg)} .pol-g.neg .pol-t{fill:var(--neg)}
+.delay{stroke:var(--ink);stroke-width:2}
+.loop-tag{cursor:pointer}
+.loop-tag circle{fill:var(--surface);stroke-width:1.6}
+.loop-tag.R circle{stroke:var(--accent)} .loop-tag.B circle{stroke:var(--neg)}
+.loop-tag text{font-family:var(--font-mono);font-size:13px;font-weight:500}
+.loop-tag.R text{fill:var(--accent)} .loop-tag.B text{fill:var(--neg)}
+.focus .m-node,.focus .m-edge,.focus .pol-g,.focus .loop-tag,.focus .delay{opacity:.14;transition:opacity .2s}
+.focus .on{opacity:1}
+.focus .m-edge.on{stroke-width:2.6}
+.focus .m-edge.on:not(.neg){stroke:var(--accent)}
+.arrow{fill:var(--line-strong)} .arrow-neg{fill:var(--neg)} .arrow-on{fill:var(--accent)}
+
+@media (max-width:960px){.wrap{grid-template-columns:1fr}.panel{position:static}.canvas{max-height:70vh}}
+@media (max-width:480px){h1{font-size:25px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="shell">
+  <header>
+    <div>
+      <div class="eyebrow">FLO · Metric Tree &amp; System Map</div>
+      <h1>FLO 지표 맵</h1>
+      <p class="lede">구독 매출이 어떤 지표로 쪼개지는지(지표 트리), 그 지표들이 서로 어떻게 밀고 당기는지(시스템 맵)를 한 곳에서 봅니다. 카드나 루프를 누르면 정의, Mixpanel 이벤트, 2025년 근거가 오른쪽에 나옵니다.</p>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="보기 전환">
+      <button role="tab" id="tab-tree" aria-selected="true" data-view="tree">지표 트리</button>
+      <button role="tab" id="tab-map" aria-selected="false" data-view="map">시스템 맵</button>
+    </nav>
+  </header>
+
+  <div class="toolbar" id="toolbar"></div>
+
+  <div class="wrap">
+    <div class="canvas" id="canvas" aria-live="polite"></div>
+    <aside class="panel" id="panel"></aside>
+  </div>
+
+  <footer>
+    <p><b>수치 출처.</b> 카드의 숫자는 Mixpanel FLO 프로젝트(2999873)의 최근 30일 <em>이벤트 수</em>(2026-11-09 조회)입니다. 유저 수가 아니며, 지표 규모를 가늠하는 참고값입니다. 매출·1인당 결제액·차량 이용자는 Mixpanel 밖(DW·파트너 데이터) 지표라 점선 카드로 표시했습니다.</p>
+    <p><b>2025 근거.</b> 「FLO 프로덕트의 2025년 여정」 회고에 실린 수치입니다. <b>정의 규칙.</b> 청취는 <code>play_track</code>(재생 버튼 클릭)이 아니라 <code>send_data_listen_track_v2</code>의 track_cnt로 봅니다. 유료 첫 결제와 자동갱신은 합산하지 않습니다.</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+const NS='http://www.w3.org/2000/svg';
+const fmt=n=>n==null?'':n>=1e6?(n/1e6).toFixed(n>=1e7?1:2).replace(/\.?0+$/,'')+'M':n>=1e3?Math.round(n/1e3).toLocaleString('ko-KR')+'K':String(n);
+const full=n=>n.toLocaleString('ko-KR');
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+/* ---------------- 지표 트리 ---------------- */
+// op: × + 는 수식 구성요소, 퍼널·동인은 영향 관계(점선)
+const TREE=[
+ {id:'ns',label:'구독 매출',sub:'North Star · DW',dw:1,def:'FLO 매출의 중심. 유료 구독자 수 × 1인당 결제액으로 분해합니다.',ev25:'드림어스컴퍼니 4년 만의 흑자 전환으로 2025년 마무리.',map:'revenue'},
+ {id:'paid',p:'ns',op:'×',label:'유료 구독자 수',sub:'DW',dw:1,def:'기간 말 유효한 유료 이용권 보유자. 신규 첫 결제로 들어오고 자동갱신으로 남습니다.',map:'retain'},
+ {id:'new',p:'paid',op:'+',label:'신규 유료 첫 결제',sub:'purchase_pass',vol:57009,def:'이용권별 첫 결제. 유료 상품은 is_paid_pass=true 범위로 봅니다.',note:'생애 첫 구매가 아닙니다. 숫자는 무료 이용권을 포함한 전체 purchase_pass 이벤트 수입니다.'},
+ {id:'passview',p:'new',op:'퍼널',label:'이용권 페이지 조회',sub:'view_page_pass',vol:226573,def:'구매 퍼널의 입구. 이용권 구매 페이지 조회.'},
+ {id:'passclick',p:'new',op:'퍼널',label:'구매 버튼 클릭',sub:'select_btn_purchase_pass',vol:65264,def:'iOS는 이용권 클릭, AOS·WEB은 "구매" 버튼 클릭 시점. OS 간 시점이 다릅니다.'},
+ {id:'signup',p:'new',op:'동인',label:'신규 가입',sub:'signup',vol:32112,def:'회원가입 완료. 가입 방식은 커스텀 속성 "가입 방식 (정규화)"로 나눠 봅니다.'},
+ {id:'renew',p:'paid',op:'+',label:'자동갱신 유지',sub:'repurchase_pass',vol:708530,def:'2회차 이상 자동갱신. 매일 같은 시각 일괄 처리됩니다.',ev25:'정기 고객 유지율이 모든 종류에서 90% 이상, 12월에는 98%를 달성한 카테고리도.',note:'유·무료 구분이 검증되지 않아 첫 결제와 더해 "유료 구매 전체"로 쓰지 않습니다.',map:'retain'},
+ {id:'listeners',p:'renew',op:'동인',label:'1분 이상 청취자',sub:'send_data_listen_track_v2',vol:13337515,def:'track_cnt>0 유저 수. 들을 이유가 있어야 갱신합니다. 유지율의 선행 지표.',note:'일배치(매일 오전 7시)라 오늘·어제 값은 미완료일 수 있습니다. 숫자는 유저×일 이벤트 수입니다.',map:'listen'},
+ {id:'search',p:'listeners',op:'동인',label:'직접 검색',sub:'input_search',vol:5284653,def:'직접 검색 완료. 자동완성·최근·급상승 검색어는 제외된 이벤트입니다.',map:'discover'},
+ {id:'multi',p:'listeners',op:'동인',label:'여러 곡 한 번에 찾기',sub:'저장 지표 없음',def:'텍스트 목록 붙여넣기·캡처 업로드로 여러 곡을 한 번에 검색.',ev25:'출시 3개월 만에 100만 곡 이상 검색.',map:'multi'},
+ {id:'browse',p:'listeners',op:'동인',label:'둘러보기',sub:'select_tab_browse',vol:2068694,def:'둘러보기 탭 진입. 장르·분위기·상황·차트로 발견합니다.',ev25:'J-POP 차트 도입으로 장르별 발견 확장.',map:'discover'},
+ {id:'mood',p:'listeners',op:'동인',label:'Moood:',sub:'view_page_moodon',vol:134106,def:'무드 기반 탐색 페이지 진입.',map:'discover'},
+ {id:'panel',p:'listeners',op:'동인',label:'홈 상단 패널',sub:'select_panel_top_home',vol:1213950,def:'홈 상단 추천 패널 클릭. 선곡 편의를 보는 대표 지표.',note:'view_page_home은 홈 데이터 갱신 건수라 노출 지표로 쓰지 않습니다.',map:'ease'},
+ {id:'quick',p:'listeners',op:'동인',label:'빠른 선곡',sub:'select_btn_quickplay_track',vol:139575,def:'첫 곡만 고르면 AI가 무드·청취 이력으로 이어서 재생.',ev25:'홈 공개 한 달 뒤 홈 화면 이용자 전달 대비 +25.6%, 평균 청취 곡 수 증가.',map:'quick'},
+ {id:'car',p:'listeners',op:'동인',label:'차량 이용자',sub:'DW · 파트너',dw:1,def:'차량 인포테인먼트에서 FLO를 쓴 이용자.',ev25:'2023년 9월 대비 2025년 9월 +105%. BMW·벤츠·볼보·르노·BYD 탑재.',map:'space'},
+ {id:'perlisten',p:'renew',op:'동인',label:'1인당 청취 횟수',sub:'Σ track_cnt ÷ 청취자',def:'1분 이상 재생 횟수 합계를 청취자 수로 나눈 값. 청취 깊이.',note:'시간 속성이 없어 청취 시간은 계산할 수 없습니다.',map:'listen'},
+ {id:'mylib',p:'renew',op:'동인',label:'보관함 활용',sub:'select_tab_my',vol:6085218,def:'보관함 탭 진입. 쌓인 내 음악이 떠나기 어려운 이유가 됩니다.',map:'asset'},
+ {id:'like',p:'mylib',op:'동인',label:'좋아요',sub:'like_track',vol:899126,def:'곡 좋아요 클릭. 담기 행동의 대표 신호.',map:'collect'},
+ {id:'clean',p:'mylib',op:'동인',label:'재생목록 청소',sub:'저장 지표 120508',def:'안 들은 곡·30일 미청취·오늘 담은 곡·중복 4가지 기준으로 자동 정리.',ev25:'이용자는 비이용자 대비 75% 더 활발하게 음악을 담음.',map:'clean'},
+ {id:'record',p:'mylib',op:'동인',label:'나의 RE;CORD',sub:'보관함 자동 분류',def:'기간별·장르별로 들은 곡을 자동 분류. 12월 연말결산부터 영구 저장.',ev25:'기존 "AI 보관함 추천" 대비 이용 고객 +72%.',map:'record'},
+ {id:'arppu',p:'ns',op:'×',label:'1인당 결제액',sub:'DW',dw:1,def:'유료 구독자 1인당 매출. 이용권 단가와 팬 결제(응원·Shop)가 올립니다.',map:'revenue'},
+ {id:'cheerpay',p:'arppu',op:'+',label:'응원하기 결제',sub:'select_btn_purchase_cheer',vol:2445,def:'응원 주문서에서 결제하기 클릭. 결제 완료는 view_page_cheer_complete.',map:'cheer'},
+ {id:'shop',p:'arppu',op:'+',label:'FLO shop',sub:'select_product_artist',vol:6560,def:'아티스트 상세의 shop 상품 클릭.',ev25:'2026년 1월 30일 FLO shop 오픈.',map:'cheer'},
+ {id:'touch',p:'arppu',op:'동인',label:'아티스트 접점',sub:'view_page_detail_artist',vol:4175058,def:'아티스트 상세 진입. 저장 지표 "아티스트 접점 액션"(154365)으로 묶어 봅니다.',ev25:'아티스트 언박싱·떠들고·디지털 포토카드로 관계의 씨앗.',map:'touch'},
+ {id:'affinity',p:'touch',op:'동인',label:'애정도',sub:'select_btn_fan_level_artist',vol:117039,def:'아티스트 상세에서 애정도 버튼 클릭.',map:'affinity'},
+ {id:'cheerplayer',p:'touch',op:'동인',label:'응원 플레이어',sub:'view_page_cheer_player',vol:416006,def:'응원 메인 플레이어 조회. 팬 활동의 규모.',map:'cheer'}
+];
+const T=Object.fromEntries(TREE.map(n=>[n.id,n]));
+const KIDS={};TREE.forEach(n=>{if(n.p)(KIDS[n.p]=KIDS[n.p]||[]).push(n)});
+const collapsed=new Set(['new','listeners','mylib','touch']);
+const CW=232,CH=62,COL=300,ROW=74,PAD=24;
+
+function drawTree(){
+  const canvas=document.getElementById('canvas');canvas.innerHTML='';canvas.id='canvas';
+  let row=0;const vis=[];
+  (function place(n,d){n.d=d;vis.push(n);const ks=collapsed.has(n.id)?[]:(KIDS[n.id]||[]);
+    if(!ks.length){n.r=row++}else{ks.forEach(k=>place(k,d+1));n.r=(ks[0].r+ks[ks.length-1].r)/2}})(T.ns,0);
+  const maxD=Math.max(...vis.map(n=>n.d));
+  const W=PAD*2+maxD*COL+CW+20,H=PAD*2+(row-1)*ROW+CH;
+  const svg=el('svg',{width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-label':'FLO 지표 트리'},canvas);
+  const X=n=>PAD+n.d*COL,Y=n=>PAD+n.r*ROW;
+  const ge=el('g',{},svg),gn=el('g',{},svg);
+  vis.forEach(n=>{if(!n.p)return;const p=T[n.p];
+    const x1=X(p)+CW+(KIDS[p.id]?14:0),y1=Y(p)+CH/2,x2=X(n),y2=Y(n)+CH/2,mx=(x1+x2)/2;
+    const inf=n.op==='동인'||n.op==='퍼널';
+    el('path',{class:'t-edge'+(inf?' inf':''),d:`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2-4},${y2}`},ge);
+    const bw=n.op.length>1?34:20,bx=x2-bw-10;
+    el('rect',{class:'op',x:bx,y:y2-10,width:bw,height:20,rx:10},ge);
+    const t=el('text',{class:'op-t',x:bx+bw/2,y:y2+4,'text-anchor':'middle'},ge);t.textContent=n.op;
+  });
+  vis.forEach(n=>{
+    const g=el('g',{class:'t-node'+(n.id==='ns'?' ns':'')+(n.dw?' dw':'')+(state.sel===n.id?' sel':''),transform:`translate(${X(n)},${Y(n)})`,tabindex:0,role:'button','aria-label':n.label},gn);
+    el('rect',{class:'card',width:CW,height:CH,rx:9},g);
+    const l=el('text',{class:'t-label',x:12,y:25},g);l.textContent=n.label;
+    const s=el('text',{class:'t-sub',x:12,y:46},g);s.textContent=n.sub;
+    if(n.vol){const v=el('text',{class:'t-vol',x:CW-10,y:25,'text-anchor':'end'},g);v.textContent=fmt(n.vol)}
+    else if(n.ev25){const v=el('text',{class:'t-vol t-ev',x:CW-10,y:25,'text-anchor':'end'},g);v.textContent='2025'}
+    g.addEventListener('click',()=>selectTree(n.id));
+    g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectTree(n.id)}});
+    if(KIDS[n.id]){
+      const tg=el('g',{class:'tog',transform:`translate(${CW+14},${CH/2})`,tabindex:0,role:'button','aria-label':(collapsed.has(n.id)?'펼치기: ':'접기: ')+n.label},g);
+      el('circle',{r:10},tg);const tt=el('text',{y:4.5,'text-anchor':'middle'},tg);tt.textContent=collapsed.has(n.id)?'+':'−';
+      const flip=e=>{e.stopPropagation();collapsed.has(n.id)?collapsed.delete(n.id):collapsed.add(n.id);drawTree()};
+      tg.addEventListener('click',flip);tg.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flip(e)}});
+    }
+  });
+}
+function selectTree(id){state.sel=id;drawTree();renderTreePanel(id)}
+function renderTreePanel(id){
+  const n=T[id],P=document.getElementById('panel');
+  const path=[];let c=n;while(c){path.unshift(c.label);c=T[c.p]}
+  P.innerHTML=`<div class="kind">${n.p?`${esc(T[n.p].label)} 의 ${n.op==='×'||n.op==='+'?'구성요소 ('+n.op+')':esc(n.op)}`:'North Star'}</div>
+   <h2>${esc(n.label)}</h2><p>${esc(n.def)}</p>
+   <dl>
+    <div><dt>측정</dt><dd>${n.dw?'Mixpanel 밖 (DW·파트너 데이터)':`<code>${esc(n.sub)}</code>`}</dd></div>
+    ${n.vol?`<div><dt>최근 30일 이벤트 수</dt><dd class="num">${full(n.vol)}</dd></div>`:''}
+    ${n.ev25?`<div><dt>2025 근거</dt><dd class="evidence">${esc(n.ev25)}</dd></div>`:''}
+    ${n.note?`<div><dt>해석 주의</dt><dd class="caution">${esc(n.note)}</dd></div>`:''}
+    <div><dt>경로</dt><dd class="caution">${path.map(esc).join(' → ')}</dd></div>
+   </dl>
+   ${n.map?`<button class="linkbtn" id="tomap">시스템 맵에서 보기</button>`:''}`;
+  const b=document.getElementById('tomap');if(b)b.onclick=()=>{go('map');focusNode(n.map)};
+}
+
+/* ---------------- 시스템 맵 ---------------- */
+// type: outcome(성과) metric(측정 변수) lever(2025 기능·개입) hidden(아직 측정 안 되는 변수)
+const MN={
+ listen:{x:600,y:400,label:'청취량',type:'metric',hub:1,tree:'listeners',def:'1분 이상 청취자 × 1인당 청취 횟수. 모든 루프가 지나가는 중심 변수.'},
+ taste:{x:405,y:292,label:'취향 데이터',type:'hidden',def:'청취 이력·좋아요·무드로 쌓이는 개인 취향 신호. 직접 지표는 없고, 이용권 결제자 대상 월간 페르소나(send_data_monthly_persona)가 근사합니다.'},
+ reco:{x:470,y:130,label:'추천 정확도',type:'hidden',def:'추천이 취향에 맞는 정도. 홈 상세 진입 대비 재생 같은 전환율(저장 지표 37500)로 근사합니다.'},
+ ease:{x:700,y:215,label:'선곡 편의',type:'metric',tree:'panel',def:'원하는 음악을 고르기까지의 수고가 적은 정도. 홈 상단 패널·빠른 선곡 이용으로 관찰합니다.'},
+ quick:{x:745,y:60,label:'빠른 선곡',type:'lever',tree:'quick',def:'첫 곡만 고르면 AI가 이어서 재생.',ev25:'홈 공개 한 달 뒤 홈 화면 이용자 +25.6%.'},
+ familiar:{x:250,y:110,label:'익숙한 곡 쏠림',type:'hidden',def:'추천이 이미 아는 곡에 몰리는 정도.'},
+ fatigue:{x:180,y:300,label:'추천 피로',type:'hidden',def:'비슷한 추천이 반복될 때 생기는 지루함. 청취를 줄입니다.'},
+ dial:{x:95,y:190,label:'성향 조절 3단계',type:'lever',tree:'quick',def:'익숙한곡–신선한곡 사이 3단계 조절로 추천 주도권을 고객에게.',ev25:'빠른 선곡과 함께 2025년 도입.'},
+ collect:{x:850,y:345,label:'보관함 담기',type:'metric',tree:'like',def:'좋아요·내 리스트로 곡을 모으는 행동.'},
+ bloat:{x:1030,y:250,label:'재생목록 비대',type:'hidden',def:'수백 곡이 쌓여 관리가 어려운 상태.'},
+ hesit:{x:885,y:140,label:'탐색 망설임',type:'hidden',def:'목록이 지저분해질까 봐 새 음악 탐색·담기를 주저하는 마음.'},
+ clean:{x:1110,y:110,label:'재생목록 청소',type:'lever',tree:'clean',def:'4가지 기준 자동 정리.',ev25:'이용자는 비이용자 대비 75% 더 활발하게 담음.'},
+ asset:{x:1010,y:480,label:'보관함 가치',type:'metric',tree:'mylib',def:'쌓인 내 음악이 주는 가치. 떠나기 어려운 이유(전환 비용)가 됩니다.'},
+ record:{x:1105,y:610,label:'나의 RE;CORD',type:'lever',tree:'record',def:'기간별·장르별 자동 분류, 연말결산 영구 저장.',ev25:'기존 AI 보관함 추천 대비 이용 고객 +72%.'},
+ retain:{x:815,y:590,label:'구독 유지율',type:'outcome',tree:'renew',def:'자동갱신으로 남는 비율.',ev25:'정기 고객 유지율 모든 종류 90%+, 12월 98% 카테고리.'},
+ revenue:{x:560,y:735,label:'구독·팬 매출',type:'outcome',tree:'ns',def:'유료 구독자 × 1인당 결제액.',ev25:'4년 만의 흑자 전환.'},
+ invest:{x:330,y:800,label:'콘텐츠·제휴 투자',type:'hidden',def:'매출이 카탈로그 계약·차량/스마트홈 제휴로 돌아가는 정도. 효과가 늦게 나타납니다.'},
+ catalog:{x:170,y:640,label:'카탈로그 규모',type:'metric',def:'찾을 수 있는 음악의 범위.',ev25:'글로벌 유통사와 국내 유일 파트너십으로 1.2억 곡. J-POP 차트 도입.'},
+ discover:{x:335,y:505,label:'발견 성공',type:'metric',tree:'search',def:'찾던 음악을 찾거나 새 음악을 만나는 일. 검색·둘러보기·Moood:로 관찰.'},
+ multi:{x:105,y:480,label:'여러 곡 한 번에 찾기',type:'lever',tree:'multi',def:'외부 플레이리스트를 텍스트·캡처로 한 번에 검색.',ev25:'출시 3개월 만에 100만 곡 이상 검색.'},
+ space:{x:470,y:600,label:'청취 공간 (차·집)',type:'metric',tree:'car',def:'폰 밖에서 FLO를 듣는 자리.',ev25:'차량 이용자 2년 만에 +105%.'},
+ car:{x:130,y:810,label:'차량 탑재·LG 씽큐 온',type:'lever',tree:'car',def:'글로벌 자동차 브랜드 탑재, 차량 전용 UX, 스마트홈 연동.',ev25:'BMW·벤츠·볼보·르노·BYD, LG전자 씽큐 온.'},
+ affinity:{x:870,y:765,label:'아티스트 애정도',type:'metric',tree:'affinity',def:'많이 들은 아티스트에 쌓이는 애정도.'},
+ cheer:{x:1065,y:850,label:'응원·Shop 참여',type:'metric',tree:'cheerplayer',def:'응원하기·FLO shop 등 팬 활동.',ev25:'2026년 1월 30일 FLO shop 오픈.'},
+ content:{x:880,y:925,label:'아티스트 콘텐츠',type:'lever',tree:'touch',def:'아티스트 언박싱·떠들고·디지털 포토카드. 아티스트가 직접 참여하는 콘텐츠.'},
+ touch:{x:680,y:860,label:'아티스트 접점',type:'metric',tree:'touch',def:'아티스트 상세 진입 등 아티스트와 만나는 순간.'}
+};
+// [from,to,polarity,bend,delay]
+const ME=[
+ ['listen','taste','+'],['taste','reco','+'],['reco','ease','+'],['ease','listen','+'],
+ ['reco','familiar','+'],['familiar','fatigue','+'],['fatigue','listen','-',.12],
+ ['collect','bloat','+'],['bloat','hesit','+'],['hesit','collect','-'],
+ ['listen','collect','+'],['collect','asset','+'],['asset','retain','+'],['retain','listen','+'],
+ ['listen','affinity','+',.1],['affinity','cheer','+'],['cheer','content','+'],['content','touch','+'],['touch','listen','+',-.08],
+ ['retain','revenue','+'],['revenue','invest','+',null,1],['invest','catalog','+'],['catalog','discover','+'],['discover','listen','+'],
+ ['quick','ease','+'],['dial','fatigue','-'],['clean','bloat','-'],['record','asset','+'],['multi','discover','+'],
+ ['invest','space','+'],['car','space','+'],['space','listen','+'],['cheer','revenue','+',.15]
+];
+const LOOPS=[
+ {id:'R1',type:'R',name:'취향 학습',e:['listen>taste','taste>reco','reco>ease','ease>listen'],at:[560,250],
+  desc:'들을수록 취향 데이터가 쌓이고, 추천과 빠른 선곡이 정확해져 다시 더 듣게 됩니다.',ev25:'빠른 선곡 홈 공개 한 달 뒤 홈 화면 이용자 +25.6%, 평균 청취 곡 수 증가.',watch:'1분 이상 청취자 · 홈 상단 패널 클릭 · 빠른 선곡 이용'},
+ {id:'B1',type:'B',name:'정리 부담',e:['collect>bloat','bloat>hesit','hesit>collect'],at:[925,250],
+  desc:'담을수록 재생목록이 비대해지고, 지저분해질까 봐 탐색과 담기를 망설이게 됩니다. 성장을 스스로 멈추는 균형 루프입니다.',ev25:'재생목록 청소가 비대함을 줄여 루프를 끊음. 이용자는 비이용자 대비 75% 더 활발하게 담음.',watch:'재생목록 청소 이용자 vs 비이용자의 좋아요·담기'},
+ {id:'B2',type:'B',name:'추천 피로',e:['reco>familiar','familiar>fatigue','fatigue>listen','listen>taste','taste>reco'],at:[310,225],
+  desc:'추천이 정확해질수록 익숙한 곡으로 쏠려 피로가 생기고, 청취가 줄어드는 균형 루프입니다. R1이 강해질수록 함께 강해집니다.',ev25:'익숙한곡–신선한곡 3단계 성향 조절로 피로를 낮추는 레버를 고객에게.',watch:'성향 조절 설정별 1인당 청취 횟수'},
+ {id:'R2',type:'R',name:'내 음악 자산',e:['listen>collect','collect>asset','asset>retain','retain>listen'],at:[810,470],
+  desc:'들은 음악이 보관함에 쌓이면 떠나기 어려운 자산이 되고, 구독이 유지되어 다시 듣습니다.',ev25:'나의 RE;CORD 이용 고객 +72%. 정기 고객 유지율 90% 이상.',watch:'보관함 탭 진입 · 좋아요 · 자동갱신'},
+ {id:'R3',type:'R',name:'팬 관계',e:['listen>affinity','affinity>cheer','cheer>content','content>touch','touch>listen'],at:[860,850],
+  desc:'자주 듣는 아티스트에 애정도가 쌓이고, 응원·Shop 참여가 아티스트의 직접 참여를 부르며, 그 접점이 다시 청취로 이어집니다. 2026년 관계 플랫폼 전략의 중심 루프입니다.',ev25:'아티스트 언박싱·떠들고·디지털 포토카드, 2026년 1월 FLO shop 오픈.',watch:'아티스트 접점 액션(저장 지표 154365) · 애정도 · 응원 플레이어'},
+ {id:'R4',type:'R',name:'재투자',e:['retain>revenue','revenue>invest','invest>catalog','catalog>discover','discover>listen','listen>collect','collect>asset','asset>retain'],at:[330,680],
+  desc:'구독 매출이 카탈로그·제휴 투자로 돌아가 발견과 청취 공간을 넓히고, 유지와 매출로 돌아옵니다. 지연(‖)이 커서 효과가 늦게 보입니다.',ev25:'1.2억 곡 라이브러리, 차량 이용자 +105%, 4년 만의 흑자 전환.',watch:'검색·둘러보기 발견 · 차량 이용자 · 유지율'}
+];
+const EK=e=>e[0]+'>'+e[1];
+function nodeSize(n){let w=0;for(const ch of n.label)w+=/[ㄱ-힝]/.test(ch)?(n.hub?17:14.2):(n.hub?9.4:7.8);return [Math.round(w+(n.hub?40:28)),n.hub?48:38]}
+function clip(n,dx,dy,pad){const [w,h]=nodeSize(n);const L=Math.hypot(dx,dy)||1;dx/=L;dy/=L;
+  const s=Math.min(dx?(w/2+pad)/Math.abs(dx):1e9,dy?(h/2+pad)/Math.abs(dy):1e9);return [n.x+dx*s,n.y+dy*s]}
+
+function drawMap(){
+  const canvas=document.getElementById('canvas');canvas.innerHTML='';
+  const wrap=document.createElement('div');wrap.id='map';canvas.appendChild(wrap);
+  const svg=el('svg',{viewBox:'0 0 1200 980',role:'img','aria-label':'FLO 시스템 맵: 지표 간 인과 루프'},wrap);
+  const defs=el('defs',{},svg);
+  [['a','arrow'],['an','arrow-neg'],['ao','arrow-on']].forEach(([id,c])=>{
+    const m=el('marker',{id:'m-'+id,viewBox:'0 0 10 10',refX:8,refY:5,markerWidth:7,markerHeight:7,orient:'auto-start-reverse'},defs);
+    el('path',{d:'M0,0 L10,5 L0,10 z',class:c},m)});
+  const gE=el('g',{},svg),gL=el('g',{},svg),gN=el('g',{},svg);
+  ME.forEach(e=>{const [a,b,pol,bend,delay]=e,A=MN[a],B=MN[b];
+    const dx=B.x-A.x,dy=B.y-A.y,len=Math.hypot(dx,dy);
+    const k=(bend==null?-.16:-bend)*Math.min(len,520);
+    const cx=(A.x+B.x)/2+(-dy/len)*k,cy=(A.y+B.y)/2+(dx/len)*k;
+    const [x1,y1]=clip(A,cx-A.x,cy-A.y,3),[x2,y2]=clip(B,cx-B.x,cy-B.y,7);
+    const lever=MN[a].type==='lever';
+    const p=el('path',{class:'m-edge'+(pol==='-'?' neg':'')+(lever?' lev':''),d:`M${x1},${y1} Q${cx},${cy} ${x2},${y2}`,'data-k':EK(e),'marker-end':`url(#m-${pol==='-'?'an':'a'})`},gE);
+    const mx=.25*x1+.5*cx+.25*x2,my=.25*y1+.5*cy+.25*y2;
+    const g=el('g',{class:'pol-g'+(pol==='-'?' neg':''),'data-k':EK(e)},gE);
+    el('circle',{class:'pol-c',cx:mx,cy:my,r:9},g);
+    const t=el('text',{class:'pol-t',x:mx,y:my+4.5,'text-anchor':'middle'},g);t.textContent=pol==='-'?'−':'+';
+    if(delay){const tx=x2-x1,ty=y2-y1,L=Math.hypot(tx,ty),ux=tx/L,uy=ty/L,qx=.5*mx+.25*x1+.25*x2-ux*22,qy=.5*my+.25*y1+.25*y2-uy*22;
+      [-3,3].forEach(o=>{el('line',{class:'delay','data-k':EK(e),x1:qx+ux*o-uy*8,y1:qy+uy*o+ux*8,x2:qx+ux*o+uy*8,y2:qy+uy*o-ux*8},gE)})}
+  });
+  LOOPS.forEach(L=>{const g=el('g',{class:'loop-tag '+L.type,'data-loop':L.id,transform:`translate(${L.at[0]},${L.at[1]})`,tabindex:0,role:'button','aria-label':`${L.id} ${L.name} 루프`},gL);
+    el('circle',{r:19},g);const t=el('text',{y:5,'text-anchor':'middle'},g);t.textContent=L.id;
+    g.addEventListener('click',()=>focusLoop(L.id));g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();focusLoop(L.id)}})});
+  Object.entries(MN).forEach(([id,n])=>{const [w,h]=nodeSize(n);
+    const g=el('g',{class:`m-node ${n.type}${n.hub?' hub':''}`,'data-id':id,transform:`translate(${n.x},${n.y})`,tabindex:0,role:'button','aria-label':n.label},gN);
+    el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:n.type==='lever'?h/2:8},g);
+    const t=el('text',{y:n.hub?6:5,'text-anchor':'middle'},g);t.textContent=n.label;
+    g.addEventListener('click',()=>focusNode(id));g.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();focusNode(id)}})});
+  svg.addEventListener('click',ev=>{if(ev.target===svg){state.focus=null;applyFocus();renderMapIntro()}});
+  applyFocus();
+}
+function applyFocus(){
+  const svg=document.querySelector('#map svg');if(!svg)return;
+  svg.querySelectorAll('.on,.sel').forEach(x=>x.classList.remove('on','sel'));
+  svg.querySelectorAll('.m-edge').forEach(p=>p.setAttribute('marker-end',`url(#m-${p.classList.contains('neg')?'an':'a'})`));
+  document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',state.focus&&state.focus.loop===c.dataset.loop?'true':'false'));
+  const f=state.focus;svg.classList.toggle('focus',!!f);if(!f)return;
+  let keys,nodes;
+  if(f.loop){const L=LOOPS.find(l=>l.id===f.loop);keys=new Set(L.e);nodes=new Set(L.e.flatMap(k=>k.split('>')));
+    svg.querySelector(`[data-loop="${f.loop}"]`).classList.add('on')}
+  else{keys=new Set(ME.filter(e=>e[0]===f.node||e[1]===f.node).map(EK));nodes=new Set([f.node,...[...keys].flatMap(k=>k.split('>'))]);
+    const s=svg.querySelector(`[data-id="${f.node}"]`);s.classList.add('sel')}
+  svg.querySelectorAll('[data-k]').forEach(x=>{if(keys.has(x.dataset.k)){x.classList.add('on');
+    if(x.classList.contains('m-edge')&&!x.classList.contains('neg'))x.setAttribute('marker-end','url(#m-ao)')}});
+  svg.querySelectorAll('.m-node').forEach(x=>{if(nodes.has(x.dataset.id))x.classList.add('on')});
+}
+function focusLoop(id){state.focus=state.focus&&state.focus.loop===id?null:{loop:id};applyFocus();
+  if(!state.focus)return renderMapIntro();
+  const L=LOOPS.find(l=>l.id===id),P=document.getElementById('panel');
+  const chain=[L.e[0].split('>')[0],...L.e.map(k=>k.split('>')[1])];
+  P.innerHTML=`<div class="kind">${L.type==='R'?'강화 루프 · Reinforcing':'균형 루프 · Balancing'}</div>
+   <h2>${L.id} ${esc(L.name)}</h2><p>${esc(L.desc)}</p>
+   <dl><div><dt>흐름</dt><dd class="caution">${chain.map(n=>esc(MN[n].label)).join(' → ')}</dd></div>
+   <div><dt>2025 근거</dt><dd class="evidence">${esc(L.ev25)}</dd></div>
+   <div><dt>지켜볼 지표</dt><dd>${esc(L.watch)}</dd></div></dl>`;
+}
+function focusNode(id){state.focus={node:id};applyFocus();
+  const n=MN[id],P=document.getElementById('panel');
+  const out=ME.filter(e=>e[0]===id),inn=ME.filter(e=>e[1]===id);
+  const loops=LOOPS.filter(L=>L.e.some(k=>k.split('>').includes(id)));
+  const btn=(nid,pol)=>`<button data-go="${nid}"><span class="pol${pol==='-'?' neg':''}">${pol==='-'?'−':'+'}</span> ${esc(MN[nid].label)}</button>`;
+  const kinds={outcome:'성과',metric:'측정 변수',lever:'2025 기능 · 레버',hidden:'아직 측정 안 되는 변수'};
+  P.innerHTML=`<div class="kind">${kinds[n.type]}</div><h2>${esc(n.label)}</h2><p>${esc(n.def)}</p>
+   <dl>${n.ev25?`<div><dt>2025 근거</dt><dd class="evidence">${esc(n.ev25)}</dd></div>`:''}
+   ${inn.length?`<div><dt>영향을 주는 것</dt><dd class="conn">${inn.map(e=>btn(e[0],e[2])).join('')}</dd></div>`:''}
+   ${out.length?`<div><dt>영향을 받는 것</dt><dd class="conn">${out.map(e=>btn(e[1],e[2])).join('')}</dd></div>`:''}
+   ${loops.length?`<div><dt>속한 루프</dt><dd class="conn">${loops.map(L=>`<button data-loopgo="${L.id}">${L.id} ${esc(L.name)}</button>`).join('')}</dd></div>`:''}
+   ${n.type==='hidden'?`<div><dt>측정 공백</dt><dd class="caution">이 변수를 직접 재는 이벤트가 없습니다. 루프의 균형을 읽으려면 대리 지표를 정하는 것이 다음 할 일입니다.</dd></div>`:''}
+   </dl>${n.tree?`<button class="linkbtn" id="totree">지표 트리에서 보기</button>`:''}`;
+  P.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>focusNode(b.dataset.go));
+  P.querySelectorAll('[data-loopgo]').forEach(b=>b.onclick=()=>focusLoop(b.dataset.loopgo));
+  const t=document.getElementById('totree');if(t)t.onclick=()=>{go('tree');let c=T[n.tree];while(c&&c.p){collapsed.delete(c.p);c=T[c.p]}selectTree(n.tree);scrollToTreeNode()};
+}
+function scrollToTreeNode(){const s=document.querySelector('.t-node.sel');if(s)s.scrollIntoView({block:'center',inline:'center',behavior:'smooth'})}
+
+/* ---------------- 툴바·패널·라우팅 ---------------- */
+function renderToolbar(view){
+  const tb=document.getElementById('toolbar');
+  if(view==='tree'){tb.innerHTML=`<div class="legend">
+    <span><span class="sw" style="border-color:var(--line-strong)"></span>× + 수식 구성요소 (실선)</span>
+    <span><span class="sw" style="border-color:var(--line-strong);border-style:dashed"></span>퍼널·동인 영향 관계 (점선 연결)</span>
+    <span><span class="sw" style="border-color:var(--line-strong);border-style:dashed"></span>점선 카드: Mixpanel 밖 지표</span>
+    <span style="font-family:var(--font-mono);color:var(--metric)">1.2M</span><span>최근 30일 이벤트 수</span>
+    <span style="font-family:var(--font-mono);color:var(--lever)">2025</span><span>회고 근거 있음</span></div>`}
+  else{tb.innerHTML=`<div class="chips" role="group" aria-label="루프 선택">${LOOPS.map(L=>`<button class="chip ${L.type}" data-loop="${L.id}" aria-pressed="false"><b>${L.id}</b>${esc(L.name)}</button>`).join('')}</div>
+    <div class="legend"><span><span class="sw" style="background:var(--accent);border-color:var(--accent)"></span>성과</span>
+    <span><span class="sw" style="background:var(--metric-soft);border-color:var(--metric)"></span>측정 변수</span>
+    <span><span class="sw" style="background:var(--lever-soft);border-color:var(--lever);border-radius:6px"></span>2025 기능·레버</span>
+    <span><span class="sw" style="border-color:var(--hidden);border-style:dashed"></span>측정 안 되는 변수</span>
+    <span><b style="font-family:var(--font-mono)">+</b> 같은 방향 · <b style="font-family:var(--font-mono);color:var(--neg)">−</b> 반대 방향 · <b>‖</b> 지연</span></div>`;
+    tb.querySelectorAll('.chip').forEach(c=>c.onclick=()=>focusLoop(c.dataset.loop))}
+}
+function renderMapIntro(){document.getElementById('panel').innerHTML=`<div class="kind">시스템 맵 읽는 법</div><h2>여섯 개의 루프</h2>
+  <p>화살표는 "앞이 늘면 뒤가 늘어난다(+)" 또는 "줄어든다(−)"를 뜻합니다. 화살표를 따라 한 바퀴 돌아오는 고리가 루프입니다.</p>
+  <dl><div><dt>R 강화 루프</dt><dd>돌수록 커지는 성장 엔진. FLO는 취향 학습(R1), 내 음악 자산(R2), 팬 관계(R3), 재투자(R4).</dd></div>
+  <div><dt>B 균형 루프</dt><dd>성장에 브레이크를 거는 고리. 정리 부담(B1), 추천 피로(B2). 2025년 기능 중 재생목록 청소와 성향 조절이 이 브레이크를 푸는 레버였습니다.</dd></div>
+  <div><dt>점선 변수</dt><dd class="caution">탐색 망설임·추천 피로처럼 아직 재는 지표가 없는 변수입니다. 균형 루프는 대부분 이런 변수에서 생깁니다.</dd></div></dl>`}
+function renderTreeIntro(){document.getElementById('panel').innerHTML=`<div class="kind">지표 트리 읽는 법</div><h2>구독 매출에서 출발합니다</h2>
+  <p>왼쪽 끝 North Star를 수식(× +)으로 쪼개고, 오른쪽으로 갈수록 팀이 직접 움직일 수 있는 입력 지표가 됩니다.</p>
+  <dl><div><dt>실선 + ×</dt><dd>더하거나 곱하면 부모 값이 되는 구성요소.</dd></div>
+  <div><dt>점선 동인·퍼널</dt><dd>수식은 아니지만 부모를 움직이는 선행 지표. 청취·보관함이 갱신의 동인입니다.</dd></div>
+  <div><dt>조작</dt><dd>카드를 누르면 상세, 오른쪽 ± 버튼으로 가지를 접고 펼칩니다.</dd></div></dl>`}
+
+const state={view:'tree',sel:null,focus:null};
+function go(view){state.view=view;
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.view===view?'true':'false'));
+  renderToolbar(view);
+  if(view==='tree'){drawTree();state.sel?renderTreePanel(state.sel):renderTreeIntro()}
+  else{drawMap();state.focus?(state.focus.loop?(()=>{const id=state.focus.loop;state.focus=null;focusLoop(id)})():focusNode(state.focus.node)):renderMapIntro()}
+  if(location.hash!=='#'+view)history.replaceState(null,'','#'+view);
+}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>go(b.dataset.view));
+window.addEventListener('hashchange',()=>{const v=location.hash.slice(1);if((v==='tree'||v==='map')&&v!==state.view)go(v)});
+go(location.hash==='#map'?'map':'tree');
+})();
+</script>
